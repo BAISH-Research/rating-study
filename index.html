@@ -119,7 +119,7 @@ function logConsent(decision, then) {
 }
 
 function consent() {
-  if (P.error) { app.innerHTML = '<p>' + esc(S.unavailable) + '</p>'; return; }
+  if (P.error) { app.innerHTML = '<p>' + esc(P.error === 'completed' ? S.already_done : S.unavailable) + '</p>'; return; }
   app.innerHTML = '<h1>' + esc(S.title) + '</h1>' + fmt(S.consent_html, info()) +
     '<p><label><input type="checkbox" id="ok"> ' + esc(S.consent_check) + '</label></p>' +
     '<div class="err" id="err"></div>' +
