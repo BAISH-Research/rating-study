@@ -33,6 +33,16 @@
   #help { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 10; overflow-y: auto; padding: 24px 12px; }
   #help .box { background: #fff; max-width: 720px; margin: 0 auto; padding: 8px 20px 20px; border-radius: 8px; }
   #helpclose { position: sticky; top: 0; float: right; margin-top: 8px; }
+  /* Phones: the two anchors of a scale on one line, the five options spread below them. */
+  @media (max-width: 600px) {
+    .scale { display: grid; grid-template-columns: repeat(5, 1fr); row-gap: 4px; gap: 4px; }
+    .scale .anchor { grid-row: 1; max-width: none; }
+    .scale .anchor:first-child { grid-column: 1 / 4; }
+    .scale .anchor:last-child { grid-column: 4 / 6; text-align: right; }
+    .scale label { grid-row: 2; padding: 4px 0; }
+    input[type=radio] { width: 20px; height: 20px; }
+    #helpbtn { top: 8px; right: 8px; }
+  }
   a.btn { display: inline-block; padding: 10px 18px; background: #0a58ca; color: #fff; border-radius: 6px; text-decoration: none; }
 </style>
 </head>
