@@ -58,6 +58,7 @@ var P, S;
 var app = document.getElementById('app');
 var idx = 0, phase = 'main', tShown = 0, tMain = 0, current = {}, tStart = Date.now();
 var helpOpens = 0;   // times the power definitions were opened on the current message (saved as help_opens)
+var answered = {};   // item keys already saved (from the server, after a reload)
 
 // The "? Power definitions" button: visible on every message screen, it opens the definitions and
 // examples of the instructions in a window over the page.
@@ -78,12 +79,17 @@ function setHelp(on) {
 
 // One request to the script. text/plain keeps it a "simple" request (no CORS preflight, which
 // Apps Script does not answer); the browser sends no cookies to script.google.com from this page.
+// A request that gets no answer in 60 s is abandoned, so the button comes back with an error
+// message instead of staying on "Saving…" forever.
 function api(action, data, ok, fail) {
   var body = Object.assign({ action: action }, data || {});
-  fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+  var ctl = window.AbortController ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function () { ctl.abort(); }, 60000) : null;
+  fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body),
+               signal: ctl ? ctl.signal : undefined })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function (j) { if (!j.ok) throw new Error(j.error || 'error'); ok(j.result); })
-    .catch(function (e) { if (window.console) console.error(e); fail(e); });
+    .then(function (j) { clearTimeout(timer); if (!j.ok) throw new Error(j.error || 'error'); ok(j.result); })
+    .catch(function (e) { clearTimeout(timer); if (window.console) console.error(e); fail(e); });
 }
 
 function fmt(s, o) { return s.replace(/\{(\w+)\}/g, function (m, k) { return (o && k in o) ? o[k] : m; }); }
@@ -119,7 +125,18 @@ function logConsent(decision, then) {
 }
 
 function consent() {
-  if (P.error) { app.innerHTML = '<p>' + esc(P.error === 'completed' ? S.already_done : S.unavailable) + '</p>'; return; }
+  if (P.error === 'completed') {
+    app.innerHTML = '<p>' + esc(S.already_done) + '</p>' + (P.completion_url ?
+      '<p>' + esc(S.already_done_link) + '</p><p><a class="btn" href="' + esc(P.completion_url) + '" target="_top">' + esc(S.back_to_prolific) + '</a></p>' : '');
+    return;
+  }
+  if (P.error) { app.innerHTML = '<p>' + esc(S.unavailable) + '</p>'; return; }
+  // A reload after some answers were saved: no new consent, straight back to the first item not saved.
+  if (Object.keys(answered).length) {
+    app.innerHTML = '<h1>' + esc(S.title) + '</h1>' + S.resume_html + '<button id="go">' + esc(S.resume) + '</button>';
+    document.getElementById('go').onclick = function () { idx = 0; showItem(); };
+    return;
+  }
   app.innerHTML = '<h1>' + esc(S.title) + '</h1>' + fmt(S.consent_html, info()) +
     '<p><label><input type="checkbox" id="ok"> ' + esc(S.consent_check) + '</label></p>' +
     '<div class="err" id="err"></div>' +
@@ -144,6 +161,7 @@ function instructions() {
 }
 
 function showItem() {
+  while (idx < P.items.length && answered[P.items[idx].key]) idx += 1;   // saved before a reload
   if (idx >= P.items.length) return feedback();
   var it = P.items[idx];
   phase = 'main'; current = {}; tShown = Date.now(); helpOpens = 0; setHelp(true);
@@ -222,7 +240,7 @@ function save() {
 }
 
 function feedback() {
-  setHelp(false);
+  setHelp(false); window.scrollTo(0, 0);
   app.innerHTML = '<h1>' + esc(S.feedback_title) + '</h1><div class="q"><div class="lab">' + esc(S.q_feedback) +
     '</div><textarea id="fb"></textarea></div><div class="err" id="err"></div><button id="go">' + esc(S.finish) + '</button>';
   var btn = document.getElementById('go');
@@ -246,6 +264,7 @@ function boot() {
   ['study', 'PROLIFIC_PID', 'STUDY_ID', 'SESSION_ID'].forEach(function (k) { d[k] = q.get(k) || ''; });
   api('init', d, function (p) {
     P = p; S = P.strings; tStart = Date.now();
+    (P.answered || []).forEach(function (k) { answered[k] = true; });
     setupHelp(); consent();
   }, function () {
     app.innerHTML = '<p>The study could not be loaded. Please check your connection and <a href="#" id="retry">try again</a>. ' +
